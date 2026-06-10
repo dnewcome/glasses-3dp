@@ -1,0 +1,14 @@
+# Python
+.venv/
+__pycache__/
+*.pyc
+
+# Generated CAD outputs and renders (regenerate with `python frames.py` / `render_iso.py`)
+/*.stl
+/*.step
+/*.svg
+/*.png
+
+# Local scratch / prototypes
+proto_*
+verify_section.py

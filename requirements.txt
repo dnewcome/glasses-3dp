@@ -1,0 +1,9 @@
+# Core: parametric CAD kernel (OpenCASCADE via OCP)
+build123d>=0.10
+
+# Optional: only needed for the render/section helpers (render_iso.py and the
+# cross-section previews). The core frames.py needs only build123d.
+cairosvg
+matplotlib
+pillow
+numpy
