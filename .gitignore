@@ -9,6 +9,7 @@ __pycache__/
 /*.svg
 /*.png
 
-# Local scratch / prototypes
+# Local scratch / prototypes / reference material
 proto_*
 verify_section.py
+old-project/

@@ -27,7 +27,9 @@ import math
 
 # Lens outline source.  Import a traced lens SVG, or fall back to the parametric
 # rounded shape below (which is also exported as a tracing template).
-INPUT_SVG      = None   # e.g. "mylens.svg"; None -> parametric + write template
+INPUT_SVG        = None # e.g. "mylens.svg"; None -> parametric + write template
+OUTLINE_WIDTH_MM = None # if set, scale the imported outline to this overall width (mm).
+                        # Use for SVGs traced in pixels; leave None if already in mm.
 OPTICAL_CENTER = None   # (x, y) mm of the optical center IN THE SVG FRAME; the outline
                         # is shifted so OC lands on the optical axis (origin), where the
                         # base/Rx spheres are centered.  None -> outline geometric center.
@@ -107,19 +109,24 @@ def export_outline_svg(face, path):
     exp.write(path)
 
 
-def load_outline_svg(path, optical_center=None):
-    """Import a traced lens outline (assumed in mm) and place its optical center at
-    the origin (the optical axis), so the base/Rx spheres are correctly centered.
+def load_outline_svg(path, optical_center=None, width_mm=None):
+    """Import a traced lens outline and place its optical center at the origin (the
+    optical axis), so the base/Rx spheres are correctly centered.  If width_mm is given,
+    the outline is scaled to that overall width (for SVGs traced in pixels).
 
     The OC is what fixes pupillary distance: a pre-ground lens has a fixed OC, so you
     position the outline relative to it rather than to its geometric center.
     """
-    shapes = import_svg(path, flip_y=True, align=None)   # preserve mm coordinates
+    shapes = import_svg(path, flip_y=True, align=None)   # preserve coordinates
     wires = [s for s in shapes if isinstance(s, Wire) and s.is_closed]
     if not wires:
         raise ValueError(f"no closed wire found in {path}")
     wire = max(wires, key=lambda w: w.length)            # largest closed loop = outline
     face = make_face(wire).faces()[0]
+    if width_mm:
+        s = width_mm / face.bounding_box().size.X
+        face = scale(face, by=s).faces()[0]
+        print(f"[svg ] scaled x{s:.5f} -> outline width {width_mm} mm")
     bb = face.bounding_box()
     if optical_center is None:
         oc = ((bb.min.X + bb.max.X) / 2, (bb.min.Y + bb.max.Y) / 2)
@@ -319,7 +326,7 @@ def build_front(face, lens, frame):
 
 def main():
     if INPUT_SVG:
-        face = load_outline_svg(INPUT_SVG, OPTICAL_CENTER)
+        face = load_outline_svg(INPUT_SVG, OPTICAL_CENTER, OUTLINE_WIDTH_MM)
         print(f"[svg ] loaded outline from {INPUT_SVG}")
     else:
         face = outline_face()
