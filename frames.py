@@ -28,6 +28,8 @@ import math
 # Lens outline source.  Import a traced lens SVG, or fall back to the parametric
 # rounded shape below (which is also exported as a tracing template).
 INPUT_SVG        = None # e.g. "mylens.svg"; None -> parametric + write template
+OUTLINE_ROTATE   = 0.0  # rotate the imported outline by this many degrees (e.g. 90 to
+                        # turn a portrait-traced lens into landscape wearing orientation)
 OUTLINE_WIDTH_MM = None # if set, scale the imported outline to this overall width (mm).
                         # Use for SVGs traced in pixels; leave None if already in mm.
 OPTICAL_CENTER = None   # (x, y) mm of the optical center IN THE SVG FRAME; the outline
@@ -64,14 +66,16 @@ GROOVE_CLEAR   = 0.10    # radial clearance at the groove bottom past the lens a
 GROOVE_TOL     = 0.15    # axial widening of the groove for side clearance, mm
 
 # Frame
-RIM_WIDTH    = 4.0       # radial width of rim material outboard of the lens
+RIM_WIDTH    = 2.5       # radial width of rim material outboard of the lens
 LIP          = 1.0       # how far frame overlaps onto the lens face (front & back)
-FRONT_PROUD  = 1.0       # frame front surface this far in +Z above the front pole
-BACK_PROUD   = 1.2       # frame back surface this far behind the lens back edge
+FRONT_PROUD  = 1.0       # frame front surface this far in +Z proud of the lens front
+BACK_PROUD   = 1.5       # blank extends this far behind the lens back (trimmed by BACK_LIP)
 LENS_TOL     = 0.10      # uniform clearance, lens vs frame (snap fit); undercut = PROTRUDE-TOL
 
-# Frame cross-section: curved shell, front AND back faces follow the base curve
-FRAME_THICK    = 6.0     # rim depth front-to-back, measured along the base curve, mm
+# Frame cross-section: a slim shell of fixed depth following the FRONT base curve only.
+# Prescription-INDEPENDENT: a strong Rx just makes a thick lens edge whose corners
+# overhang the back of the frame (as in real frames) -- the frame never chases the Rx.
+FRAME_THICK  = 4.0       # rim depth front-to-back along the base curve, mm
 
 # Two-eye front + bridge
 PD             = 62.0    # pupillary distance: separation of the two optical centers, mm
@@ -109,10 +113,10 @@ def export_outline_svg(face, path):
     exp.write(path)
 
 
-def load_outline_svg(path, optical_center=None, width_mm=None):
+def load_outline_svg(path, optical_center=None, width_mm=None, rotate=0.0):
     """Import a traced lens outline and place its optical center at the origin (the
-    optical axis), so the base/Rx spheres are correctly centered.  If width_mm is given,
-    the outline is scaled to that overall width (for SVGs traced in pixels).
+    optical axis), so the base/Rx spheres are correctly centered.  Optionally rotate
+    (degrees) and scale to a target width (for SVGs traced in pixels / wrong orientation).
 
     The OC is what fixes pupillary distance: a pre-ground lens has a fixed OC, so you
     position the outline relative to it rather than to its geometric center.
@@ -122,7 +126,15 @@ def load_outline_svg(path, optical_center=None, width_mm=None):
     if not wires:
         raise ValueError(f"no closed wire found in {path}")
     wire = max(wires, key=lambda w: w.length)            # largest closed loop = outline
+    # flatten to a fine polyline: OCCT 2D-offset (rim/inset) fails on Bezier/spline
+    # edges but is robust on line segments.
+    n, L = 240, wire.length
+    pts = [wire.position_at((i / n) * L, position_mode=PositionMode.LENGTH) for i in range(n)]
+    wire = Polyline(*[(p.X, p.Y) for p in pts], close=True)
     face = make_face(wire).faces()[0]
+    if rotate:
+        face = Rot(0, 0, rotate) * face
+        print(f"[svg ] rotated {rotate} deg")
     if width_mm:
         s = width_mm / face.bounding_box().size.X
         face = scale(face, by=s).faces()[0]
@@ -161,13 +173,24 @@ def wire_tan(wire, u, length):
 def meniscus(face, inset=0.0):
     """Front/back spherical meniscus with a vertical edge at the outline (optionally
     inset).  inset=BEVEL_PROTRUDE gives the lens body without its bevel ridge (== the
-    surfaces the frame lips rest on)."""
+    surfaces the frame lips rest on).  Uses the Rx back -- for the LENS model only."""
     src = face
     if inset:
         with BuildSketch() as s:
             add(face); offset(amount=-inset)
         src = s.sketch.faces()[0]
     return (extrude(src, amount=40, both=True) & front_ball()) - back_ball()
+
+
+def seat_solid(face):
+    """Prescription-INDEPENDENT lens seat: the front-surface cap over the inset outline,
+    extruded straight back.  Differencing it from the frame gives the front lip seat plus
+    a straight cavity the lens overhangs through -- the back (Rx) curve never enters the
+    frame geometry."""
+    with BuildSketch() as s:
+        add(face); offset(amount=-BEVEL_PROTRUDE)
+    inset = s.sketch.faces()[0]
+    return extrude(inset, amount=40, both=True) & front_ball()
 
 
 # ----------------------------------------------------------------------------
@@ -272,11 +295,10 @@ def build_frame(face):
     bb = face.bounding_box()
     r_max = math.hypot(max(abs(bb.min.X), abs(bb.max.X)),
                        max(abs(bb.min.Y), abs(bb.max.Y)))
-    deepest = CENTER_THICK + sag(R_BACK, r_max)            # lens back at the rim
-    total_h = FRONT_PROUD + deepest + BACK_PROUD
+    total_h = FRONT_PROUD + sag(R_FRONT, r_max) + FRAME_THICK + 2.0   # front-based, no Rx
     blank = extrude(Pos(0, 0, FRONT_PROUD) * ring, amount=-total_h)
 
-    seat = scale(meniscus(face, inset=BEVEL_PROTRUDE), by=1.0 + LENS_TOL / r_max)
+    seat = scale(seat_solid(face), by=1.0 + LENS_TOL / r_max)
     print(f"[frame] seat clearance {LENS_TOL}mm; groove undercut "
           f"~{BEVEL_PROTRUDE - GROOVE_TOL / 2:.2f}mm")
     return (blank - seat) - groove_tool(face)
@@ -301,15 +323,19 @@ def build_bridge(face, right_frame, left_frame):
         Box(x1 - x0, y1 - y0, z1 - z0)
 
 
+def curve_rim(frame, cx):
+    """Place a single rim at optical center x=cx and bound it between two concentric
+    FRONT-curve spheres (a slim shell of depth FRAME_THICK).  Prescription-independent:
+    a thick (strong-Rx) lens edge simply overhangs the back."""
+    proud = Pos(cx, 0, -R_FRONT) * Sphere(R_FRONT + FRONT_PROUD)
+    inner = Pos(cx, 0, -R_FRONT) * Sphere(R_FRONT + FRONT_PROUD - FRAME_THICK)
+    return ((Pos(cx, 0, 0) * frame) & proud) - inner
+
+
 def build_front(face, lens, frame):
-    """Mirror the eye to ±PD/2, join with the bridge, and curve the front face to
-    follow each lens base curve (a sphere standing FRONT_PROUD proud of the lens front)."""
-    # curve each RIM's front AND back to follow the base curve: bound between two
-    # concentric spheres (a curved shell of depth FRAME_THICK).  Do this per-eye
-    # BEFORE the bridge -- the per-eye spheres don't reach the nose/bridge.
-    proud = lambda cx: Pos(cx, 0, -R_FRONT) * Sphere(R_FRONT + FRONT_PROUD)
-    inner = lambda cx: Pos(cx, 0, -R_FRONT) * Sphere(R_FRONT + FRONT_PROUD - FRAME_THICK)
-    right_frame = ((Pos(PD / 2, 0, 0) * frame) & proud(PD / 2)) - inner(PD / 2)
+    """Mirror the eye to ±PD/2 and join with the bridge into one printable front."""
+    # curve each rim per-eye BEFORE the bridge (per-eye spheres don't reach the nose).
+    right_frame = curve_rim(frame, PD / 2)
     left_frame = mirror(right_frame, about=Plane.YZ)        # lands at -PD/2, mirror shape
     bridge = build_bridge(face, right_frame, left_frame)
     front = right_frame + left_frame + bridge
@@ -326,7 +352,7 @@ def build_front(face, lens, frame):
 
 def main():
     if INPUT_SVG:
-        face = load_outline_svg(INPUT_SVG, OPTICAL_CENTER, OUTLINE_WIDTH_MM)
+        face = load_outline_svg(INPUT_SVG, OPTICAL_CENTER, OUTLINE_WIDTH_MM, OUTLINE_ROTATE)
         print(f"[svg ] loaded outline from {INPUT_SVG}")
     else:
         face = outline_face()
