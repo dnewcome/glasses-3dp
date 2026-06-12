@@ -50,6 +50,19 @@ Preview it without a CAD program:
 python render_iso.py   # writes iso.png
 ```
 
+## Single-eye test print
+
+To validate the snap fit with one lens, generate a single rim instead of the full front:
+
+```bash
+python single_eye.py   # writes right_eye_frame.stl (+ right_eye_lens.stl)
+```
+
+It defaults to the bundled `examples/sample-lens.svg` (rotated to landscape, scaled to
+55.5mm). Edit `INPUT_SVG` / `OUTLINE_ROTATE` / `OUTLINE_WIDTH_MM` at the top for your own
+lens. The snap fit has been confirmed on an FDM print; SLA (stiffer, more brittle) may
+need a looser `LENS_TOL` or shallower `BEVEL_PROTRUDE`.
+
 ## Using your own lens
 
 1. **Trace the outline.** Flatbed-scan the lens (true 1:1 mm scale, no perspective), trace it to a single closed path, and export an **SVG in millimeters**.
