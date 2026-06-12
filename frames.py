@@ -177,7 +177,7 @@ def meniscus(face, inset=0.0):
     src = face
     if inset:
         with BuildSketch() as s:
-            add(face); offset(amount=-inset)
+            add(face); offset(amount=-inset, kind=Kind.INTERSECTION)
         src = s.sketch.faces()[0]
     return (extrude(src, amount=40, both=True) & front_ball()) - back_ball()
 
@@ -188,7 +188,7 @@ def seat_solid(face):
     a straight cavity the lens overhangs through -- the back (Rx) curve never enters the
     frame geometry."""
     with BuildSketch() as s:
-        add(face); offset(amount=-BEVEL_PROTRUDE)
+        add(face); offset(amount=-BEVEL_PROTRUDE, kind=Kind.INTERSECTION)
     inset = s.sketch.faces()[0]
     return extrude(inset, amount=40, both=True) & front_ball()
 
@@ -236,8 +236,8 @@ def build_lens(face):
         return make_face(Polyline(apex, infront, inback, close=True))
 
     tris = [tri(i / n) for i in range(n)]
-    ridge = [loft([tris[i], tris[(i + 1) % n]], ruled=True) for i in range(n)]
-    lens = body + Compound(ridge)
+    ridge = loft(tris + [tris[0]], ruled=True)    # one fused solid (no seam slivers)
+    lens = body + ridge
     return lens
 
 
@@ -278,7 +278,7 @@ def groove_tool(face):
                                   (mx, my, az - width / 2), close=True))
 
     profs = [prof(i / n) for i in range(n)]
-    return Compound([loft([profs[i], profs[(i + 1) % n]], ruled=True) for i in range(n)])
+    return loft(profs + [profs[0]], ruled=True)   # one fused solid (no seam slivers)
 
 
 # ----------------------------------------------------------------------------
@@ -287,9 +287,9 @@ def groove_tool(face):
 
 def build_frame(face):
     with BuildSketch() as osk:
-        add(face); offset(amount=RIM_WIDTH)
+        add(face); offset(amount=RIM_WIDTH, kind=Kind.INTERSECTION)
     with BuildSketch() as isk:
-        add(face); offset(amount=-LIP)
+        add(face); offset(amount=-LIP, kind=Kind.INTERSECTION)
     ring = osk.sketch - isk.sketch
 
     bb = face.bounding_box()
