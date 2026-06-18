@@ -46,8 +46,9 @@ LENS_TOL      = 0.10        # opening radial clearance, mm
 FACE_FORM_R   = 700.0       # wrap radius, mm (0 = flat).  ~700 -> a few deg of wrap
 
 # --- hinges (screw-on, into the back of each temporal corner) ----------------
-HINGE_Y       = 4.0         # screw-pad center this far above the eye line, mm
-HINGE_INSET   = 4.5         # screw-pad center this far in from the temporal edge, mm
+HINGE_Y       = 20.0        # screw-pad center height -- at the top-temporal tab (the little
+                            # flares that stick out), where a real frame's hinge sits
+HINGE_INSET   = 5.0         # screw-pad center this far in from the temporal edge, mm
 HINGE_SCREW_D = 0.9         # pilot hole diameter, mm
 HINGE_SCREW_SP= 3.0         # vertical (Y) spacing between the two pilot holes, mm
 HINGE_HOLE_DEP= 4.0         # pilot hole depth into the back of the frame, mm
@@ -231,8 +232,9 @@ def main():
     # combined assembled view (temples opened) -- print the 3 parts separately
     bbf = front.bounding_box()
     px = bbf.max.X - HINGE_INSET
-    asmR = Pos(px, HINGE_Y, 0) * Rot(0, 7, 0) * temple
-    asmL = Pos(-px, HINGE_Y, 0) * Rot(0, -7, 0) * mirror(temple, about=Plane.YZ)
+    pz = mid_z(px) - THICK / 2                        # back surface at the tab
+    asmR = Pos(px, HINGE_Y, pz) * Rot(0, 7, 0) * temple
+    asmL = Pos(-px, HINGE_Y, pz) * Rot(0, -7, 0) * mirror(temple, about=Plane.YZ)
     export_stl(Compound([front, asmR, asmL]), "glasses.stl")
 
     bb = front.bounding_box()
