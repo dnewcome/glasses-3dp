@@ -46,11 +46,14 @@ LENS_TOL      = 0.10        # opening radial clearance, mm
 FACE_FORM_R   = 700.0       # wrap radius, mm (0 = flat).  ~700 -> a few deg of wrap
 
 # --- hinges (screw-on, into the back of each temporal corner) ----------------
-HINGE_Y       = 20.0        # screw-pad center height -- at the top-temporal tab (the little
-                            # flares that stick out), where a real frame's hinge sits
-HINGE_INSET   = 5.0         # screw-pad center this far in from the temporal edge, mm
+HINGE_Y       = 22.0        # screw-pad / temple center height -- up at the top-temporal tab
+                            # (the little flares that stick out)
+HINGE_INSET   = 5.0         # temple this far in from the temporal edge, mm (= temple midpoint)
+# The hinge's front leaf screws to the endpiece inboard of the temple; these two pilots are
+# measured in from the temple MIDPOINT.
+HINGE_HOLE1   = 5.5         # first pilot, mm in from the temple midpoint
+HINGE_HOLE2   = 8.5         # second pilot, mm in from the temple midpoint
 HINGE_SCREW_D = 0.9         # pilot hole diameter, mm
-HINGE_SCREW_SP= 3.0         # vertical (Y) spacing between the two pilot holes, mm
 HINGE_HOLE_DEP= 4.0         # pilot hole depth into the back of the frame, mm
 
 # --- temples (separate printable arms) ---------------------------------------
@@ -148,18 +151,19 @@ def hinge_holes(front):
     """Bore two screw pilot holes into the BACK (z=0) of each temporal corner, where the
     hinge's front leaf screws on.  Built at the right corner, mirrored to the left."""
     bb = front.bounding_box()
-    xc = bb.max.X - HINGE_INSET
-    back_z = mid_z(xc) - THICK / 2                             # back surface at the corner
+    xc = bb.max.X - HINGE_INSET                                # temple midpoint (x)
     holes = []
     for sgn in (1, -1):                                        # right (+x) and left (-x)
-        for dy in (HINGE_SCREW_SP / 2, -HINGE_SCREW_SP / 2):
-            holes.append(Pos(sgn * xc, HINGE_Y + dy, back_z + HINGE_HOLE_DEP / 2 - 0.1)
+        for off in (HINGE_HOLE1, HINGE_HOLE2):                 # measured in from the midpoint
+            x = sgn * (xc - off)
+            bz = mid_z(x) - THICK / 2                          # back surface at this x
+            holes.append(Pos(x, HINGE_Y, bz + HINGE_HOLE_DEP / 2 - 0.1)
                          * Cylinder(HINGE_SCREW_D / 2, HINGE_HOLE_DEP + 0.2))
     out = front
     for h in holes:
         out = out - h
-    print(f"[hinge] 2 pads of dia-{HINGE_SCREW_D} pilots, sp {HINGE_SCREW_SP}mm, at "
-          f"x=+/-{xc:.1f}, y={HINGE_Y}, depth {HINGE_HOLE_DEP}mm into the back")
+    print(f"[hinge] front-leaf pilots at x=+/-{xc-HINGE_HOLE1:.1f} & +/-{xc-HINGE_HOLE2:.1f} "
+          f"({HINGE_HOLE1}/{HINGE_HOLE2}mm in from temple midpoint {xc:.1f}), y={HINGE_Y}, back")
     return out
 
 
