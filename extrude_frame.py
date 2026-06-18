@@ -42,6 +42,11 @@ GROOVE_MERGE  = 0.50        # mouth reaches this far inside the opening wall (ov
 GROOVE_STN    = 220         # stations swept around each lens
 # groove depth past the opening wall = BEVEL_PROTRUDE + GROOVE_CLEAR = 0.80mm (test print
 # was 0.55mm); the opening/seat is inset by the full BEVEL_PROTRUDE, like frames.py.
+LENS_TOL      = 0.25        # radial clearance: the ENTIRE lens cavity (opening + groove) is
+                            # grown by this so the real lens drops in.  A thick stiff frame
+                            # won't flex like the thin test print, and SLA shrinks the hole
+                            # undersize -- RAISE if the lens is tight, lower if it rattles.
+                            # (Grows opening AND groove together, so groove depth is kept.)
 
 # --- face form: gentle horizontal wrap toward the temples (about a vertical axis) --------
 FACE_FORM_R   = 700.0       # wrap radius, mm (0 = flat).  ~700 -> a few deg of wrap
@@ -193,13 +198,22 @@ def main():
     right_lens = (Pos(eye_dx, 0, 0) * lens).faces()[0]
     left_lens = mirror(right_lens, about=Plane.YZ).faces()[0]
 
-    # the see-through opening = the lens SURFACE (apex inset by the bevel flank), with a
-    # touch of clearance -- the apex itself is held in the groove (as in frames.py).
-    def surface_opening(lens_face):                  # inset by the full bevel, like frames.py
+    # grow the lens outline by LENS_TOL: the whole cavity (opening + groove) is built from
+    # this, so the real lens drops in with clearance while the groove keeps its full depth.
+    def grow(face, amt):
+        with BuildSketch() as s:
+            add(face); offset(amount=amt, kind=Kind.INTERSECTION)
+        return s.sketch.faces()[0]
+    right_cav = grow(right_lens, LENS_TOL)
+    left_cav = grow(left_lens, LENS_TOL)
+
+    # the see-through opening = the lens SURFACE (cavity inset by the full bevel flank);
+    # the apex itself is held in the groove (as in frames.py).
+    def surface_opening(cav):
         with BuildSketch() as ok:
-            add(lens_face); offset(amount=-BEVEL_PROTRUDE, kind=Kind.INTERSECTION)
+            add(cav); offset(amount=-BEVEL_PROTRUDE, kind=Kind.INTERSECTION)
         return ok.sketch.faces()[0]
-    right_op, left_op = surface_opening(right_lens), surface_opening(left_lens)
+    right_op, left_op = surface_opening(right_cav), surface_opening(left_cav)
 
     # size the outer silhouette to wrap the openings with the target rims
     need_w = 2 * eye_dx + lb.size.X + 2 * RIM_SIDE
@@ -226,8 +240,8 @@ def main():
     else:
         front = extrude(frame_face, amount=THICK)
 
-    # lens retention groove (bevel-keyed) + hinge pilot holes
-    front = front - groove_tool(right_lens) - groove_tool(left_lens)
+    # lens retention groove (bevel-keyed, on the grown cavity) + hinge pilot holes
+    front = front - groove_tool(right_cav) - groove_tool(left_cav)
     front = hinge_holes(front)
 
     export_stl(front, "frame_front.stl")
