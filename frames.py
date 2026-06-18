@@ -87,6 +87,26 @@ BRIDGE_H       = 8.0     # bridge vertical height, mm
 BRIDGE_BACK    = 3.5     # bridge extends from the frame front to z = -BRIDGE_BACK, mm
 BRIDGE_OVERLAP = 3.0     # how far the bridge reaches into each rim (to fuse), mm
 
+# Hinge endpiece: a screw-on flat pad at each temporal (outer) corner.  The hinge's
+# front leaf mounts on the BACK (-Z, wearer-facing) face of the endpiece -- as on real
+# frames, so the temple folds flat against the back of the lenses -- and the two pilot
+# holes are bored FORWARD (+Z) into the boss.  A flat pad stands proud of the curved
+# rim back; the holes are kept outboard of the lens groove so they never break into the
+# lens pocket.  Built for the right eye and mirrored for the left (stays symmetric).
+#
+# Defaults are set to the user's measured hinge: 6 mm wide leaf (-> BOSS_H), 2 screw
+# holes 3 mm apart along the leaf length at ~1 mm dia, ~10 mm overall set-back at 90 deg
+# (front leaf ~5 mm long -> PAD_L gives margin).  Tune to your own hinge.
+HINGE_REACH      = 2.5   # how far the boss stands temporally proud of the rim edge, mm
+HINGE_PAD_L      = 7.0   # leaf footprint along X (temporal), mm  -- holds the 2 holes
+HINGE_BOSS_H     = 7.0   # endpiece vertical size (Y), mm  -- leaf is 6 mm wide (+margin)
+HINGE_PAD_PROUD  = 0.5   # flat back pad stands this far behind the curved rim back, mm
+HINGE_DROP       = 0.0   # pad center this far below the lens vertical center, mm
+HINGE_SCREW_D    = 0.9   # pilot hole diameter, mm (undersized for a self-tapping ~1mm screw)
+HINGE_SCREW_SP   = 3.0   # spacing between the two screw pilot holes (along X), mm
+HINGE_HOLE_DEPTH = 3.5   # pilot hole depth forward into the endpiece, mm
+HINGE_SPLAY      = 0.0   # temple toe-in: rotate the pad about vertical (deg), + toes in
+
 OUT_DIR  = "."
 SVG_PATH = "sample_lens.svg"
 Z = Vector(0, 0, 1)
@@ -123,6 +143,7 @@ def load_outline_svg(path, optical_center=None, width_mm=None, rotate=0.0):
     """
     shapes = import_svg(path, flip_y=True, align=None)   # preserve coordinates
     wires = [s for s in shapes if isinstance(s, Wire) and s.is_closed]
+    wires += [s.outer_wire() for s in shapes if isinstance(s, Face)]   # filled paths
     if not wires:
         raise ValueError(f"no closed wire found in {path}")
     wire = max(wires, key=lambda w: w.length)            # largest closed loop = outline
@@ -332,10 +353,68 @@ def curve_rim(frame, cx):
     return ((Pos(cx, 0, 0) * frame) & proud) - inner
 
 
+def hinge_endpiece(rim, cx=0.0):
+    """Add a BACK-mounted screw-on endpiece at the rim's temporal (+X) edge: a flat pad
+    on the rim's back (-Z) face with two pilot holes bored forward (+Z) for the hinge's
+    front leaf.  Build for the RIGHT eye (temporal = +X); the left eye is its mirror,
+    which carries the endpiece across automatically.  `cx` is the rim's optical-center x.
+
+    The pad is a flat lozenge standing HINGE_PAD_PROUD behind the curved rim back (which
+    is most rearward at the temporal edge).  Its X span is kept outboard of the lens
+    outline (groove inboard of that) so the forward-bored holes can't reach the lens
+    pocket.  HINGE_SPLAY rotates the endpiece about the vertical axis to toe the temple in."""
+    bb = rim.bounding_box()
+    x_edge = bb.max.X
+    out_max = x_edge - RIM_WIDTH          # lens outline temporal edge; groove is inboard
+    yc = -HINGE_DROP
+
+    # rim's LOCAL curved-shell z at the temporal edge (largest radius -> most rearward)
+    r_edge = x_edge - cx
+    front_z = FRONT_PROUD - sag(R_FRONT, r_edge)
+    back_z = front_z - FRAME_THICK
+    pad_z = back_z - HINGE_PAD_PROUD      # flat back pad, just proud of the curved back
+
+    temporal = x_edge + HINGE_REACH
+    nasal = max(temporal - HINGE_PAD_L, out_max)   # keep the pad outboard of the groove
+    xc = (nasal + temporal) / 2
+    pad_len = temporal - nasal
+    margin = (pad_len - HINGE_SCREW_SP) / 2
+
+    # boss: from the flat back pad forward to just shy of the rim front (embedded, fuses)
+    boss_front = front_z - 0.5
+    boss = Pos(xc, yc, (pad_z + boss_front) / 2) \
+        * Box(pad_len, HINGE_BOSS_H, boss_front - pad_z)
+
+    holes = []
+    for dx in (HINGE_SCREW_SP / 2, -HINGE_SCREW_SP / 2):
+        # cylinder along +Z (default axis), breaking the back pad and reaching forward
+        zc = pad_z + HINGE_HOLE_DEPTH / 2 - 0.1
+        holes.append(Pos(xc + dx, yc, zc) * Cylinder(HINGE_SCREW_D / 2, HINGE_HOLE_DEPTH + 0.2))
+
+    # optional toe-in: rotate the endpiece about the vertical axis at the rim edge
+    if HINGE_SPLAY:
+        zpivot = (pad_z + boss_front) / 2
+        def splay(s):
+            return Pos(x_edge, yc, zpivot) * Rot(0, HINGE_SPLAY, 0) * Pos(-x_edge, -yc, -zpivot) * s
+        boss = splay(boss)
+        holes = [splay(h) for h in holes]
+
+    print(f"[hinge] back pad x[{nasal:.1f},{temporal:.1f}] z={pad_z:.1f} (proud "
+          f"{HINGE_PAD_PROUD}mm), 2x dia-{HINGE_SCREW_D} pilots sp {HINGE_SCREW_SP}mm along X, "
+          f"depth {HINGE_HOLE_DEPTH}mm, hole-to-edge {margin:.1f}mm, splay {HINGE_SPLAY} deg")
+    if margin < 0.5:
+        print(f"[hinge] WARNING: only {margin:.2f}mm between screw and pad edge -- "
+              f"raise HINGE_REACH or HINGE_PAD_L")
+    out = rim + boss
+    for h in holes:
+        out = out - h
+    return out
+
+
 def build_front(face, lens, frame):
     """Mirror the eye to ±PD/2 and join with the bridge into one printable front."""
     # curve each rim per-eye BEFORE the bridge (per-eye spheres don't reach the nose).
-    right_frame = curve_rim(frame, PD / 2)
+    right_frame = hinge_endpiece(curve_rim(frame, PD / 2), PD / 2)
     left_frame = mirror(right_frame, about=Plane.YZ)        # lands at -PD/2, mirror shape
     bridge = build_bridge(face, right_frame, left_frame)
     front = right_frame + left_frame + bridge

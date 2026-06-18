@@ -63,6 +63,24 @@ It defaults to the bundled `examples/sample-lens.svg` (rotated to landscape, sca
 lens. The snap fit has been confirmed on an FDM print; SLA (stiffer, more brittle) may
 need a looser `LENS_TOL` or shallower `BEVEL_PROTRUDE`.
 
+## Full glasses — outline-driven (`extrude_frame.py`)
+
+The newest generator builds a **complete styled pair**: it imports a full frame-front
+silhouette (e.g. a Wayfarer outline) for the *style* and your real lens outline for the
+*openings*, sizes them to fit with a proper nose gap, then extrudes — so the bridge has
+real room (unlike deriving the frame by placing one lens at the PD).
+
+```bash
+python trace_frame.py     # PNG frame outline -> examples/wayfarer-frame.svg (one-time)
+python extrude_frame.py   # -> frame_front.stl, temple_right/left.stl, glasses.stl
+```
+
+It layers on the same retention model — a base-curve-following V groove keyed to the lens
+bevel (`BEVEL_PROTRUDE` / `BASE_DIOPTERS`), screw-on hinge endpieces, separate temple arms,
+and a gentle face-form wrap (`FACE_FORM_R`). `acetate.py` is an earlier bold-acetate variant
+that derives the rim by offsetting the lens (kept for reference). All parameters are at the
+top of each script.
+
 ## Using your own lens
 
 1. **Trace the outline.** Flatbed-scan the lens (true 1:1 mm scale, no perspective), trace it to a single closed path, and export an **SVG in millimeters**.
@@ -90,6 +108,7 @@ All live at the top of `frames.py`:
 | `RIM_WIDTH`, `FRAME_THICK`, `LIP` | rim width, shell depth, lip overlap |
 | `PD`, `DECENTER` | pupillary distance and optical-center decentration |
 | bridge params | `BRIDGE_*` for the nose bridge bar |
+| hinge params | `HINGE_*` for the screw-on temporal endpiece (pad size, screw pilot dia/spacing, depth, splay) |
 
 ## How it works
 
@@ -97,9 +116,9 @@ All live at the top of `frames.py`:
 
 ## Status / roadmap
 
-Working: lens + bevel, symmetric groove with retention, curved-shell two-eye front + bridge, SVG import, PD/decentration. **A test print is the only way to dial in the snap fit** for your resin.
+Working: lens + bevel, symmetric groove with retention, curved-shell two-eye front + bridge, screw-on hinge endpieces (flat pad + pilot holes at each temporal corner), SVG import, PD/decentration. **A test print is the only way to dial in the snap fit** for your resin.
 
-Not done yet: hinge pockets for temples, bridge refinement (saddle/keyhole, nose-step blend), temples/arms.
+Not done yet: bridge refinement (saddle/keyhole, nose-step blend), temples/arms (the printed front takes a commercial screw-on hinge for now).
 
 ## License
 

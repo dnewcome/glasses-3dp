@@ -24,7 +24,7 @@ WITH_LENS        = False    # also export reference lens STLs (these have a cosm
 face = frames.load_outline_svg(INPUT_SVG, OPTICAL_CENTER, OUTLINE_WIDTH_MM, OUTLINE_ROTATE)
 frame = frames.build_frame(face)
 
-right = frames.curve_rim(frame, 0)             # one rim at the optical axis
+right = frames.hinge_endpiece(frames.curve_rim(frame, 0))  # rim + temporal hinge pad
 left = mirror(right, about=Plane.YZ)           # the other eye is its mirror
 
 for name, part in (("right", right), ("left", left)):
