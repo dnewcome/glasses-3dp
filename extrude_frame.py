@@ -31,16 +31,17 @@ SQUASH_BOT  = 0.80          # scale everything below the eye line by this in Y (
 # --- lens groove (retention): SAME method/keying as the test lens (frames.py groove_tool):
 # a symmetric V keyed to the lens bevel.  Mouth at the lens surface (outline-BEVEL_PROTRUDE),
 # bottom GROOVE_CLEAR past the apex (outline), width from the bevel depth + angle.
-BEVEL_PROTRUDE= 0.45        # how far the lens bevel apex protrudes past its surfaces, mm
+BEVEL_PROTRUDE= 0.50        # how far the lens bevel apex protrudes past its surfaces, mm
 BASE_DIOPTERS = 6.0         # lens front base curve (lens-clock diopters) -> R = 530/D.  The
                             # groove apex line curves with this sphere's sag, like the lens.
 GROOVE_ANGLE  = 90.0        # symmetric V apex angle, deg
-GROOVE_CLEAR  = 0.10        # groove bottom this far past the lens apex, mm
+GROOVE_CLEAR  = 0.30        # groove bottom this far past the lens apex, mm (deeper channel)
 GROOVE_TOL    = 0.15        # axial widening for side clearance, mm
 GROOVE_MERGE  = 0.50        # mouth reaches this far inside the opening wall (overlap, not
                             # coincide -- coincident faces wreck the boolean)
 GROOVE_STN    = 220         # stations swept around each lens
-LENS_TOL      = 0.10        # opening radial clearance, mm
+# groove depth past the opening wall = BEVEL_PROTRUDE + GROOVE_CLEAR = 0.80mm (test print
+# was 0.55mm); the opening/seat is inset by the full BEVEL_PROTRUDE, like frames.py.
 
 # --- face form: gentle horizontal wrap toward the temples (about a vertical axis) --------
 FACE_FORM_R   = 700.0       # wrap radius, mm (0 = flat).  ~700 -> a few deg of wrap
@@ -54,6 +55,7 @@ HINGE_INSET   = 5.0         # temple this far in from the temporal edge, mm (= t
 HINGE_HOLE1   = 5.5         # first pilot, mm in from the temple midpoint
 HINGE_HOLE2   = 8.5         # second pilot, mm in from the temple midpoint
 HINGE_SCREW_D = 0.9         # pilot hole diameter, mm
+HINGE_SCREW_SP= 3.0         # spacing for the temple's own mating pilots, mm
 HINGE_HOLE_DEP= 4.0         # pilot hole depth into the back of the frame, mm
 
 # --- temples (separate printable arms) ---------------------------------------
@@ -193,9 +195,9 @@ def main():
 
     # the see-through opening = the lens SURFACE (apex inset by the bevel flank), with a
     # touch of clearance -- the apex itself is held in the groove (as in frames.py).
-    def surface_opening(lens_face):
+    def surface_opening(lens_face):                  # inset by the full bevel, like frames.py
         with BuildSketch() as ok:
-            add(lens_face); offset(amount=-(BEVEL_PROTRUDE - LENS_TOL), kind=Kind.INTERSECTION)
+            add(lens_face); offset(amount=-BEVEL_PROTRUDE, kind=Kind.INTERSECTION)
         return ok.sketch.faces()[0]
     right_op, left_op = surface_opening(right_lens), surface_opening(left_lens)
 
