@@ -81,6 +81,32 @@ and a gentle face-form wrap (`FACE_FORM_R`). `acetate.py` is an earlier bold-ace
 that derives the rim by offsetting the lens (kept for reference). All parameters are at the
 top of each script.
 
+### Two groove architectures (`frames.py` vs `extrude_frame.py`)
+
+The single-eye test print and the outline-driven full frame retain the lens **differently** —
+both validated by print, but they are not the same geometry:
+
+- **`frames.py` (single-eye test print)** — a true eyewire: the rim solid is
+  `(blank − seat) − groove`, three separate cuts. The front opening is inset by `LIP` (~1.0mm)
+  so the **front face overlaps onto the lens front surface** — a retaining lip that stops the
+  lens falling forward. The `seat_solid` cavity is inset by `BEVEL_PROTRUDE` and extruded
+  *straight back* (intersected with the **front** sphere only), so the lens's meniscus back
+  curve floats free — **the back is deliberately relieved** (the Rx/back curve never enters the
+  frame). The V groove is ~0.55mm deep × ~1.25mm wide. Net: the lens drops in from the back,
+  the front lip stops it, the groove snaps it — retention from *three* features.
+
+- **`extrude_frame.py` (outline-driven full frame)** — the opening is a single straight prism
+  cut through the **full thickness** (inset by `BEVEL_PROTRUDE` from the lens cavity, which is
+  itself grown by `LENS_TOL`). Front and back are *identical* — **no front lip and no back
+  relief**. To compensate, its V groove is deeper and wider (~0.80mm × ~1.75mm, plus a
+  `GROOVE_MERGE` overlap for clean booleans), so retention leans on the groove alone. This is
+  why the test print shows extra clearance behind the lens and a shallower groove, while the
+  full frame looks tighter front-to-back with a deeper channel.
+
+Porting the test print's front-lip + relieved-back architecture into `extrude_frame.py` (a
+tighter opening on the front face only, an open back) is a possible future improvement — it
+would grab the lens the way real eyewire does instead of relying on groove depth.
+
 ## Using your own lens
 
 1. **Trace the outline.** Flatbed-scan the lens (true 1:1 mm scale, no perspective), trace it to a single closed path, and export an **SVG in millimeters**.
