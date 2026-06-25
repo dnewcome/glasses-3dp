@@ -16,6 +16,7 @@ This is the seed of the eventual full parametric-Rx lens; sphere only for now
 (cylinder / axis for astigmatism is TODO -> a toric back surface).
 """
 import math
+import os
 import struct
 
 import frames
@@ -27,6 +28,13 @@ PRESCRIPTION_SPH = -2.0    # sphere power (D); back curve = base - Rx  (demo len
 CENTER_THICK     = 2.0     # center thickness, mm (a touch thick for a printable blank)
 LENS_DIAMETER    = 60.0    # round blank diameter, mm (covers a ~55.5mm lens; grind down)
 EDGE_BEVEL       = False   # True -> grind a V bevel onto the edge; False -> plain edge
+
+# Mesh resolution.  This is an OPTICAL surface, so the facets must be far finer than a
+# typical printed part.  MESH_TOL is the max chordal deviation (mm): on a sphere of radius
+# R the facet chord is ~2*sqrt(2*R*MESH_TOL), so 1e-5 -> ~0.08mm facets on the R~88mm front
+# (vs the 0.001 default's ~0.8mm visible flats).  Finer = smoother surface but bigger file.
+MESH_TOL         = 1.0e-5  # chordal tolerance, mm
+MESH_ANG         = 0.05    # angular tolerance, rad (normal change between adjacent facets)
 # -----------------------------------------------------------------------------
 
 # Drive frames.py's optics with these values.  Its R_FRONT/R_BACK are module globals
@@ -94,7 +102,7 @@ def main():
     # build_lens() adds the front-tracked V bevel for a frame groove.
     lens = frames.build_lens(face) if EDGE_BEVEL else frames.meniscus(face)
 
-    export_stl(lens, "lens.stl")
+    export_stl(lens, "lens.stl", tolerance=MESH_TOL, angular_tolerance=MESH_ANG)
     ntri, leaks = clean_stl("lens.stl")          # remove sphere-pole slivers -> watertight
 
     r = LENS_DIAMETER / 2
@@ -105,7 +113,9 @@ def main():
           f"{' (+V bevel)' if EDGE_BEVEL else ''}")
     print(f"  bbox {bb.size.X:.1f} x {bb.size.Y:.1f} x {bb.size.Z:.1f} mm, "
           f"solids={len(lens.solids())}, volume {lens.volume:.0f} mm^3")
-    print(f"  mesh cleaned: {ntri} triangles, "
+    facet = 2 * math.sqrt(2 * frames.R_FRONT * MESH_TOL)     # ~chord on the front sphere
+    mb = os.path.getsize("lens.stl") / 1e6
+    print(f"  mesh: {ntri} triangles, ~{facet:.2f}mm facets (tol {MESH_TOL:g}mm), {mb:.1f} MB, "
           f"{'WATERTIGHT' if leaks == 0 else f'{leaks} non-manifold edges'}")
 
 
